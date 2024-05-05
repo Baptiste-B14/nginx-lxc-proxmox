@@ -6,6 +6,7 @@ EPS_UTILS_DISTRO=${EPS_UTILS_DISTRO:-}
 EPS_APP_CONFIG=${EPS_APP_CONFIG:-}
 EPS_CLEANUP=${EPS_CLEANUP:-false}
 EPS_CT_INSTALL=${EPS_CT_INSTALL:-false}
+__OUTPUT=/dev/null
 
 if [ -z "$EPS_BASE_URL" -o -z "$EPS_OS_DISTRO" -o -z "$EPS_UTILS_COMMON" -o -z "$EPS_UTILS_DISTRO" -o -z "$EPS_APP_CONFIG" ]; then
   printf "Script looded incorrectly!\n\n";
@@ -88,45 +89,69 @@ step_start "Rust" "Installing" "Installed"
   step_end "Rust ${CLR_CYB}v$RUST_VERSION${CLR} ${CLR_GN}Installed"
 
 step_start "Python"
-  export PIP_ROOT_USER_ACTION=ignore
-  # Remove old venv and global pip packages
-  rm -rf /opt/certbot/ /usr/bin/certbot
-  if [ "$(command -v pip)" ]; then
-    pip uninstall -q -y cryptography cffi certbot tldextract --break-system-packages &>$__OUTPUT
-  fi
+export PIP_ROOT_USER_ACTION=ignore
 
-  # Remove potential conflicting depenedencies
-  pkg_del *3-pip *3-cffi *3-cryptography *3-tldextract *3-distutils *3-venv
+# Checking if pip is installed before attempting to uninstall packages
+if ! command -v pip &>/dev/null; then
+    echo "pip is not installed, skipping uninstallation of packages."
+else
+    for pkg in cryptography cffi certbot tldextract; do
+        if pip show $pkg &>/dev/null; then
+            echo "Uninstalling $pkg..."
+            pip uninstall -q -y $pkg
+        else
+            echo "Package $pkg not installed, skipping..."
+        fi
+    done
+fi
 
-  # Install python depenedencies
-  pkg_add python3
-  if [ "$EPS_OS_DISTRO" != "alpine" ]; then
+# Continue with installing Python and necessary packages
+pkg_del *3-pip *3-cffi *3-cryptography *3-tldextract *3-distutils *3-venv
+pkg_add python3
+if [ "$EPS_OS_DISTRO" != "alpine" ]; then
     pkg_add python3-venv
-  fi
+fi
 
-  PYTHON_VERSION=$(python3 -V | sed 's/.* \([0-9]\).\([0-9]*\).*/\1.\2/')
-  if printf "$PYTHON_VERSION\n3.2" | sort -cV &>/dev/null; then
-    step_end "Python 3.2+ required, you currently have ${CLR_CYB}v$PYTHON_VERSION${CLR} installed" 1
-  fi
+# Checking Python version and setting up pip
+PYTHON_VERSION=$(python3 -V 2>&1 | awk '{print $2}')
+if printf "3.2\n$PYTHON_VERSION" | sort -V | head -1 | grep -q "3.2"; then
+    echo "Compatible Python version installed: $PYTHON_VERSION"
+else
+    step_end "Python 3.2+ required, you currently have $PYTHON_VERSION installed" 1
+    return
+fi
 
-  _pipGetScript="https://bootstrap.pypa.io/get-pip.py"
-  if printf "$PYTHON_VERSION\n3.7" | sort -cV &>/dev/null; then
-    _pipGetScript="https://bootstrap.pypa.io/pip/$PYTHON_VERSION/get-pip.py"
-  fi
-  
-  # Setup venv and install pip packages in venv
-  python3 -m venv /opt/certbot/
-  . /opt/certbot/bin/activate
-  os_fetch -O- $_pipGetScript | python3 >$__OUTPUT
-  pip install -q -U --no-cache-dir cryptography cffi certbot tldextract
-  PIP_VERSION=$(pip -V 2>&1 | grep -o 'pip [0-9.]* ' | awk '{print $2}')
-  deactivate
+# Set up virtual environment
+python3 -m venv /opt/certbot/
+source /opt/certbot/bin/activate
 
-  ln -sf /usr/bin/python3 /usr/bin/python
-  ln -sf /opt/certbot/bin/pip /usr/bin/pip
-  ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
-  
-  step_end "Python ${CLR_CYB}v$PYTHON_VERSION${CLR} ${CLR_GN}and Pip${CLR} ${CLR_CYB}v$PIP_VERSION${CLR} ${CLR_GN}Installed"
+# Determine package manager
+if [ "$EPS_OS_DISTRO" = "alpine" ]; then
+    PIP_INSTALL_CMD="apk add --no-cache py3-pip"
+elif [ "$EPS_OS_DISTRO" = "debian" ] || [ "$EPS_OS_DISTRO" = "ubuntu" ]; then
+    PIP_INSTALL_CMD="apt-get update && apt-get install -y python3-pip"
+else
+    step_end "Unsupported distribution: $EPS_OS_DISTRO" 1
+    return
+fi
+
+# Install pip using the determined package manager
+$PIP_INSTALL_CMD
+
+# Install required packages using pip
+pip install -q -U --no-cache-dir cryptography cffi certbot tldextract
+PIP_VERSION=$(pip -V | awk '{print $2}')
+echo "Installed pip version $PIP_VERSION"
+
+# Deactivate virtual environment
+deactivate
+
+# Linking binaries for easier access
+ln -sf /usr/bin/python3 /usr/bin/python
+ln -sf /opt/certbot/bin/pip /usr/bin/pip
+ln -sf /opt/certbot/bin/certbot /usr/bin/certbot
+
+step_end "Python ${CLR_CYB}v$PYTHON_VERSION${CLR} ${CLR_GN}and Pip${CLR} ${CLR_CYB}v$PIP_VERSION${CLR} ${CLR_GN}Installed"
 
 step_start "Openresty"
   if [ "$EPS_OS_DISTRO" = "alpine" ]; then
