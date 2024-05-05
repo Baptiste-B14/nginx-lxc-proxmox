@@ -58,7 +58,7 @@ step_start "Dependencies" "Installing" "Installed"
 step_start "Rust" "Installing" "Installed"
   _rustArch=""
   _rustClibtype="gnu"
-  
+
   if [ "$EPS_OS_DISTRO" = "alpine" ]; then
     _rustClibtype="musl"
   fi
@@ -76,7 +76,7 @@ step_start "Rust" "Installing" "Installed"
       step_end "Architecture not supported: ${CLR_CYB}$EPS_OS_ARCH${CLR}" 1
     fi
   fi
-  
+
   os_fetch -O ./rustup-init https://static.rust-lang.org/rustup/archive/1.26.0/$_rustArch/rustup-init
   chmod +x ./rustup-init
   ./rustup-init -q -y --no-modify-path --profile minimal --default-toolchain $RUST_VERSION --default-host $_rustArch &>$__OUTPUT
@@ -244,7 +244,7 @@ step_start "Enviroment" "Setting up" "Setup"
   # Update NPM version in package.json files
   sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$NPM_VERSION\"/" backend/package.json
   sed -i "s/\"version\": \"0.0.0\"/\"version\": \"$NPM_VERSION\"/" frontend/package.json
-  
+
   # Fix nginx config files for use with openresty defaults
   sed -i 's/user npm/user root/g; s/^pid/#pid/g; s+^daemon+#daemon+g' docker/rootfs/etc/nginx/nginx.conf
   sed -i 's/include-system-site-packages = false/include-system-site-packages = true/g' /opt/certbot/pyvenv.cfg
@@ -302,9 +302,9 @@ step_start "Enviroment" "Setting up" "Setup"
 step_start "Frontend" "Building" "Built"
   cd ./frontend
   export NODE_ENV=development
-  yarn cache clean --silent --force >$__OUTPUT
-  yarn install --silent --network-timeout=30000 >$__OUTPUT 
-  yarn build >$__OUTPUT 
+  yarn cache clean --silent >$__OUTPUT
+  yarn install --silent --network-timeout=30000 >$__OUTPUT
+  yarn build >$__OUTPUT
   cp -r dist/* /app/frontend
   cp -r app-images/* /app/frontend/images
 
@@ -316,7 +316,7 @@ step_start "Backend" "Initializing" "Initialized"
   fi
   cd /app
   export NODE_ENV=development
-  yarn install --silent --network-timeout=30000 >$__OUTPUT 
+  yarn install --silent --network-timeout=30000 >$__OUTPUT
 
 step_start "Services" "Starting" "Started"
   printf "$EPS_SERVICE_DATA\n" | tee $EPS_SERVICE_FILE >$__OUTPUT
@@ -332,6 +332,18 @@ step_start "Enviroment" "Cleaning" "Cleaned"
     pkg_del "$EPS_DEPENDENCIES"
   fi
   pkg_clean
+
+  # Iterate through each .conf file in the directory
+for file in /data/nginx/proxy_host/*.conf; do
+    # Check if the file exists and is readable
+    if [ -f "$file" ] && [ -r "$file" ]; then
+        # Use sed to modify the file in-place
+        sed -i -E 's/(listen \[?::]?443 ssl) http2;/\1;/g' "$file"
+        sed -i -E '/listen \[?::]?443 ssl;$/a \ \ \ \ http2 on;' "$file"
+    fi
+done
+
+rm -rf /tmp/*
 
 step_end "Installation complete"
 printf "\nNginx Proxy Manager should be reachable at ${CLR_CYB}http://$(os_ip):81${CLR}\n\n"
