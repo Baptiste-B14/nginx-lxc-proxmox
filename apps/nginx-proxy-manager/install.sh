@@ -195,7 +195,7 @@ step_start "Node.js"
 
 step_start "Yarn"
   # curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg -o yarn-pubkey.gpg
-  gpg --import yarn-pubkey.gpg
+  #gpg --import /root/yarn-pubkey.gpg
 
   os_fetch -O yarn-v$YARN_VERSION.tar.gz https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz
   os_fetch -O yarn-v$YARN_VERSION.tar.gz.asc https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz.asc
