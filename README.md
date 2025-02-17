@@ -1,3 +1,5 @@
+# This is a copy of [whiskerz007](https://github.com/whiskerz007?tab=repositories) repository, with some arrangement in the install.sh script to work on my own installation
+
 # Proxmox scripts
 
 Some useful proxmox scripts...
